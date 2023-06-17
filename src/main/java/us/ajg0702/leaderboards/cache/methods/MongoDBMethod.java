@@ -131,7 +131,7 @@ public class MongoDBMethod implements CacheMethod {
     public void resetBoard(String board, TimedType type, long newTime) {
         Map<String, Double> uuids = new HashMap<>();
         for (Document document : mongoDatabase.getCollection(tablePrefix + board).find()) {
-            uuids.put(document.getString("playerID"), document.getDouble(type.lowerName() + "_delta"));
+            uuids.put(document.get("playerID", UUID.class).toString(), document.getDouble(type.lowerName() + "_delta"));
         }
         Partition<String> partition = Partition.ofSize(new ArrayList<>(uuids.keySet()), Math.max(uuids.size(), 1));
         Debug.info("Partition length: " + partition.size() + " uuids size: " + uuids.size() + " partition chunk size: " + partition.getChunkSize());
@@ -142,7 +142,7 @@ public class MongoDBMethod implements CacheMethod {
                         return;
                     }
                     mongoDatabase.getCollection(tablePrefix + board)
-                            .updateOne(Filters.eq("playerID", idRaw),
+                            .updateOne(Filters.eq("playerID", UUID.fromString(idRaw)),
                                     Updates.combine(Updates.set(type.lowerName() + "_lasttotal", uuids.get(idRaw))
                                             , Updates.set(type.lowerName() + "_delta", 0)
                                             , Updates.set(type.lowerName() + "_timestamp", newTime)));
