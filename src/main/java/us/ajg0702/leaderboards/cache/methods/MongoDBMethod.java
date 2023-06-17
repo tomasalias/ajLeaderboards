@@ -2,6 +2,7 @@ package us.ajg0702.leaderboards.cache.methods;
 
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
+import com.mongodb.MongoCommandException;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoDatabase;
@@ -193,8 +194,12 @@ public class MongoDBMethod implements CacheMethod {
 
     @Override
     public boolean createBoard(String name) {
-        mongoDatabase.createCollection(tablePrefix + name);
-        return true;
+        try {
+            mongoDatabase.createCollection(tablePrefix + name);
+            return true;
+        } catch (MongoCommandException ignored) {
+            return false;
+        }
     }
 
     @Override
@@ -330,7 +335,10 @@ public class MongoDBMethod implements CacheMethod {
 
     @Override
     public void createExtraTable() {
-        mongoDatabase.createCollection(tablePrefix + "extras");
+        try {
+            mongoDatabase.createCollection(tablePrefix + "extras");
+        } catch (MongoCommandException ignored) {
+        }
     }
 
     private boolean isReverse(String board) {
