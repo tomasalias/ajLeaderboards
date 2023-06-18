@@ -26,7 +26,6 @@ dependencies {
     testImplementation("junit:junit:4.13.1")
 
     implementation("io.github.slimjar:slimjar:1.2.7")
-    compileOnly("com.github.MilkBowl:VaultAPI:1.7")
     compileOnly("org.spigotmc:spigot-api:1.18.2-R0.1-SNAPSHOT")
     compileOnly("me.clip:placeholderapi:2.11.1")
     compileOnly("org.xerial:sqlite-jdbc:3.32.3.2")

@@ -1,6 +1,9 @@
 package us.ajg0702.leaderboards.cache;
 
 import me.clip.placeholderapi.PlaceholderAPI;
+import net.luckperms.api.LuckPermsProvider;
+import net.luckperms.api.cacheddata.CachedMetaData;
+import net.luckperms.api.platform.PlayerAdapter;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.spongepowered.configurate.ConfigurateException;
@@ -214,12 +217,9 @@ public class Cache {
 			displayName = player.getPlayer().getDisplayName();
 		}
 
-		String prefix = "";
-		String suffix = "";
-		if(plugin.hasVault() && player instanceof Player && plugin.getAConfig().getBoolean("fetch-prefix-suffix-from-vault")) {
-			prefix = plugin.getVaultChat().getPlayerPrefix((Player)player);
-			suffix = plugin.getVaultChat().getPlayerSuffix((Player)player);
-		}
+		CachedMetaData metaData = LuckPermsProvider.get().getPlayerAdapter(Player.class).getMetaData(player.getPlayer());
+		String prefix = metaData.getPrefix();
+		String suffix = metaData.getSuffix();
 
 		StatEntry cached = plugin.getTopManager().getCachedStatEntry(player, board, TimedType.ALLTIME);
 		if(cached != null && cached.hasPlayer() && cached.getScore() == output && cached.getPlayerDisplayName().equals(displayName) && cached.getPrefix().equals(prefix) && cached.getSuffix().equals(suffix)) {

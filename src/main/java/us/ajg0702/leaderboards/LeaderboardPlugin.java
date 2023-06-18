@@ -7,11 +7,9 @@ import me.clip.placeholderapi.PlaceholderAPI;
 import net.kyori.adventure.platform.bukkit.BukkitAudiences;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.milkbowl.vault.chat.Chat;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitWorker;
 import org.spongepowered.configurate.CommentedConfigurationNode;
@@ -20,7 +18,6 @@ import org.spongepowered.configurate.serialize.SerializationException;
 import us.ajg0702.commands.CommandSender;
 import us.ajg0702.commands.platforms.bukkit.BukkitCommand;
 import us.ajg0702.commands.platforms.bukkit.BukkitSender;
-import us.ajg0702.leaderboards.boards.keys.BoardType;
 import us.ajg0702.leaderboards.boards.StatEntry;
 import us.ajg0702.leaderboards.boards.TimedType;
 import us.ajg0702.leaderboards.boards.TopManager;
@@ -58,11 +55,16 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.logging.Level;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class LeaderboardPlugin extends JavaPlugin {
 
+    private static MiniMessage miniMessage;
+    private static BukkitAudiences adventure;
+    final HashMap<TimedType, Integer> resetIds = new HashMap<>();
+    private final Exporter exporter = new Exporter(this);
+    private final PlaceholderFormatter placeholderFormatter = new PlaceholderFormatter(this);
+    private final Map<String, OfflineUpdater> offlineUpdaters = new ConcurrentHashMap<>();
+    int updateTaskId = -1;
     private Config config;
     private Cache cache;
     private ExtraManager extraManager;
@@ -73,15 +75,20 @@ public class LeaderboardPlugin extends JavaPlugin {
     private HeadUtils headUtils;
     private ArmorStandManager armorStandManager;
     private LuckpermsContextLoader contextLoader;
-    private final Exporter exporter = new Exporter(this);
-    private final PlaceholderFormatter placeholderFormatter = new PlaceholderFormatter(this);
-
-    private final Map<String, OfflineUpdater> offlineUpdaters = new ConcurrentHashMap<>();
-
-    private boolean vault;
-    private Chat vaultChat;
-
     private boolean shuttingDown = false;
+    private long lastTimeAlert = 0;
+    private boolean doublePrevention = false; // without this, in testing, the message appeared twice about 90% of the time
+
+    public static MiniMessage getMiniMessage() {
+        if (miniMessage == null) {
+            miniMessage = MiniMessage.miniMessage();
+        }
+        return miniMessage;
+    }
+
+    public static Component message(String miniMessage) {
+        return getMiniMessage().deserialize(Messages.color(miniMessage));
+    }
 
     @Override
     public void onLoad() {
@@ -101,7 +108,7 @@ public class LeaderboardPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
 
-        if(isShuttingDown()) {
+        if (isShuttingDown()) {
             throw new IllegalStateException("Reload was used! ajLeaderboards does not support this!");
         }
         StatEntry.setPlugin(this);
@@ -110,7 +117,6 @@ public class LeaderboardPlugin extends JavaPlugin {
         bukkitMainCommand.register(this);
 
         BukkitSender.setAdventure(getAdventure());
-
 
 
         try {
@@ -129,7 +135,7 @@ public class LeaderboardPlugin extends JavaPlugin {
 
         CommentedConfigurationNode msgs = messages.getRootNode();
 
-        if(msgs.hasChild(getSignPath("1"))) {
+        if (msgs.hasChild(getSignPath("1"))) {
             List<String> linesList = new ArrayList<>();
 
             for (int i = 1; i <= 4; i++) {
@@ -138,7 +144,7 @@ public class LeaderboardPlugin extends JavaPlugin {
 
             try {
                 msgs.node(getSignPath("default")).setList(String.class, linesList);
-                for(int i = 1; i <= 4; i++) {
+                for (int i = 1; i <= 4; i++) {
                     msgs.node(getSignPath(i)).set(null);
                 }
                 messages.save();
@@ -148,21 +154,7 @@ public class LeaderboardPlugin extends JavaPlugin {
 
         }
 
-
         TimeUtils.setStrings(messages);
-
-        Bukkit.getScheduler().runTask(this, () -> {
-            if(Bukkit.getPluginManager().isPluginEnabled("Vault")) {
-                RegisteredServiceProvider<Chat> rsp = getServer().getServicesManager().getRegistration(Chat.class);
-                if(rsp == null) {
-                    vault = false;
-                    getLogger().warning("Vault prefix hook failed! Make sure you have a plugin that implements chat (e.g. Luckperms)");
-                } else {
-                    vaultChat = rsp.getProvider();
-                    vault = true;
-                }
-            }
-        });
 
         signManager = new SignManager(this);
         headManager = new HeadManager(this);
@@ -173,7 +165,7 @@ public class LeaderboardPlugin extends JavaPlugin {
 
         List<String> initialBoards = cache.getBoards();
 
-        getLogger().info("Loaded "+initialBoards.size()+" boards");
+        getLogger().info("Loaded " + initialBoards.size() + " boards");
 
         extraManager = new ExtraManager(this);
 
@@ -194,7 +186,7 @@ public class LeaderboardPlugin extends JavaPlugin {
         metrics.addCustomChart(new Metrics.SimplePie("storage_method", () -> getCache().getMethod().getName()));
 
         PlaceholderExpansion placeholders = new PlaceholderExpansion(this);
-        if(placeholders.register()) {
+        if (placeholders.register()) {
             getLogger().info("PAPI placeholders successfully registered!");
         } else {
             getLogger().warning("Failed to register ajlb PAPI placeholders!");
@@ -205,12 +197,13 @@ public class LeaderboardPlugin extends JavaPlugin {
 
         Bukkit.getPluginManager().registerEvents(new Listeners(this), this);
 
-        getLogger().info("ajLeaderboards v"+getDescription().getVersion()+" by ajgeiss0702 enabled!");
+        getLogger().info("ajLeaderboards v" + getDescription().getVersion() + " by ajgeiss0702 enabled!");
     }
 
     private Iterable<String> getSignPath(int i) {
-        return getSignPath(i+"");
+        return getSignPath(String.valueOf(i));
     }
+
     private Iterable<String> getSignPath(String end) {
         return Arrays.asList("signs", "top", end);
     }
@@ -218,11 +211,11 @@ public class LeaderboardPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         shuttingDown = true;
-        if(getContextLoader() != null) getContextLoader().checkReload(false);
+        if (getContextLoader() != null) getContextLoader().checkReload(false);
         Bukkit.getScheduler().cancelTasks(this);
-        if(getTopManager() != null) getTopManager().shutdown();
+        if (getTopManager() != null) getTopManager().shutdown();
 
-        if(getCache() != null) {
+        if (getCache() != null) {
             ExecutorService executorService = Executors.newSingleThreadExecutor();
             executorService.execute(() -> {
                 getLogger().info("Shutting down cache method..");
@@ -235,7 +228,8 @@ public class LeaderboardPlugin extends JavaPlugin {
                     executorService.shutdownNow();
                     getLogger().warning("Cache took too long to shut down. Skipping it.");
                 }
-            }catch(InterruptedException ignored){}
+            } catch (InterruptedException ignored) {
+            }
         }
 
         getLogger().info("Killing remaining workers");
@@ -244,12 +238,12 @@ public class LeaderboardPlugin extends JavaPlugin {
         killWorkers(5000);
         getLogger().info("Remaining workers killed");
 
-        getLogger().info("ajLeaderboards v"+getDescription().getVersion()+" disabled.");
+        getLogger().info("ajLeaderboards v" + getDescription().getVersion() + " disabled.");
 
         Bukkit.getScheduler().getActiveWorkers().forEach(bukkitWorker -> {
-            Debug.info("Active worker: "+bukkitWorker.getOwner().getDescription().getName()+" "+bukkitWorker.getTaskId());
+            Debug.info("Active worker: " + bukkitWorker.getOwner().getDescription().getName() + " " + bukkitWorker.getTaskId());
             for (StackTraceElement stackTraceElement : bukkitWorker.getThread().getStackTrace()) {
-                Debug.info(" - "+stackTraceElement);
+                Debug.info(" - " + stackTraceElement);
             }
         });
     }
@@ -258,19 +252,19 @@ public class LeaderboardPlugin extends JavaPlugin {
         List<BukkitWorker> workers = new ArrayList<>(Bukkit.getScheduler().getActiveWorkers());
         List<Integer> killedWorkers = new ArrayList<>();
         workers.forEach(bukkitWorker -> {
-            if(!bukkitWorker.getOwner().equals(this)) return;
+            if (!bukkitWorker.getOwner().equals(this)) return;
             int id = bukkitWorker.getTaskId();
-            if(killedWorkers.contains(id)) return;
-            Debug.info("Got worker "+id);
+            if (killedWorkers.contains(id)) return;
+            Debug.info("Got worker " + id);
             try {
                 bukkitWorker.getThread().interrupt();
                 Debug.info("Interupted");
                 bukkitWorker.getThread().join(waitForDeath);
                 Debug.info("Death");
-            } catch(SecurityException e) {
-                Debug.info("denied: "+e.getMessage());
+            } catch (SecurityException e) {
+                Debug.info("denied: " + e.getMessage());
             } catch (InterruptedException ignored) {
-                Debug.info("threw interupted exception on "+id);
+                Debug.info("threw interupted exception on " + id);
             }
             killedWorkers.add(id);
         });
@@ -296,10 +290,6 @@ public class LeaderboardPlugin extends JavaPlugin {
         return messages;
     }
 
-    public boolean hasVault() {
-        return vault;
-    }
-
     public SignManager getSignManager() {
         return signManager;
     }
@@ -314,10 +304,6 @@ public class LeaderboardPlugin extends JavaPlugin {
 
     public HeadManager getHeadManager() {
         return headManager;
-    }
-
-    public Chat getVaultChat() {
-        return vaultChat;
     }
 
     public LuckpermsContextLoader getContextLoader() {
@@ -336,45 +322,44 @@ public class LeaderboardPlugin extends JavaPlugin {
         return offlineUpdaters;
     }
 
-    int updateTaskId = -1;
     public void reloadInterval() {
-        if(updateTaskId != -1) {
+        if (updateTaskId != -1) {
             try {
                 Bukkit.getScheduler().cancelTask(updateTaskId);
-            } catch(IllegalArgumentException ignored) {}
+            } catch (IllegalArgumentException ignored) {
+            }
             updateTaskId = -1;
         }
         updateTaskId = Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
-            if(!config.getBoolean("update-stats")) return;
-            if(getTopManager().getFetchingAverage() > 100) {
+            if (!config.getBoolean("update-stats")) return;
+            if (getTopManager().getFetchingAverage() > 100) {
                 getLogger().warning("Database is overloaded! Skipping update of players.");
                 return;
             }
-            for(Player p : Bukkit.getOnlinePlayers()) {
-                if(isShuttingDown()) return;
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                if (isShuttingDown()) return;
                 getTopManager().submit(() -> getCache().updatePlayerStats(p));
             }
-        }, 10*20, config.getInt("stat-refresh")).getTaskId();
-        Debug.info("Update task id is "+updateTaskId);
+        }, 10 * 20, config.getInt("stat-refresh")).getTaskId();
+        Debug.info("Update task id is " + updateTaskId);
     }
 
-    final HashMap<TimedType, Integer> resetIds = new HashMap<>();
     public void scheduleResets() {
         resetIds.values().forEach(Bukkit.getScheduler()::cancelTask);
         resetIds.clear();
 
-        for(TimedType type : TimedType.values()) {
+        for (TimedType type : TimedType.values()) {
             try {
                 scheduleReset(type);
             } catch (ExecutionException | InterruptedException e) {
-                if(isShuttingDown()) return;
+                if (isShuttingDown()) return;
                 getLogger().log(Level.WARNING, "Scheduling reset interupted:", e);
             }
         }
     }
 
     public void scheduleReset(TimedType type) throws ExecutionException, InterruptedException {
-        if(type.equals(TimedType.ALLTIME)) return;
+        if (type.equals(TimedType.ALLTIME)) return;
 
         long now = Instant.now().getEpochSecond();
 
@@ -388,37 +373,37 @@ public class LeaderboardPlugin extends JavaPlugin {
             long estLastReset = type.getEstimatedLastReset().toEpochSecond(TimeUtils.getDefaultZoneOffset());
             long lastResetConverted = lastResetDate.toEpochSecond(TimeUtils.getDefaultZoneOffset());
 
-            if(lastResetConverted < estLastReset) {
-                Debug.info("lastRest for "+type+" "+board+" is before estimatedLastReset! "+lastReset+" < "+estLastReset);
+            if (lastResetConverted < estLastReset) {
+                Debug.info("lastRest for " + type + " " + board + " is before estimatedLastReset! " + lastReset + " < " + estLastReset);
                 resetNow.add(board);
             }
         }
 
-        if(resetNow.size() > 0) {
+        if (resetNow.size() > 0) {
             Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
                 try {
                     for (String board : resetNow) {
                         cache.reset(board, type);
                     }
                 } catch (ExecutionException | InterruptedException e) {
-                    if(isShuttingDown()) return;
-                    getLogger().log(Level.WARNING, "Unable to reset "+type+": (interupted/exception)", e);
+                    if (isShuttingDown()) return;
+                    getLogger().log(Level.WARNING, "Unable to reset " + type + ": (interupted/exception)", e);
                 }
             });
         }
 
-        if(isShuttingDown()) return;
+        if (isShuttingDown()) return;
 
         long secsTilNextReset = nextReset - now;
-        Debug.info("Initial secsTilNextReset for "+type.lowerName()+": "+secsTilNextReset);
-        if(secsTilNextReset < 0) {
+        Debug.info("Initial secsTilNextReset for " + type.lowerName() + ": " + secsTilNextReset);
+        if (secsTilNextReset < 0) {
             secsTilNextReset = 0;
         }
 
 
-        Debug.info(TimeUtils.formatTimeSeconds(secsTilNextReset)+" until the reset for "+type.lowerName()+" (next formatted: "+type.getNextReset().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.RFC_1123_DATE_TIME)+" next: "+nextReset+")");
+        Debug.info(TimeUtils.formatTimeSeconds(secsTilNextReset) + " until the reset for " + type.lowerName() + " (next formatted: " + type.getNextReset().atOffset(ZoneOffset.UTC).format(DateTimeFormatter.RFC_1123_DATE_TIME) + " next: " + nextReset + ")");
 
-        if(isShuttingDown()) return;
+        if (isShuttingDown()) return;
         int taskId = Bukkit.getScheduler().runTaskLaterAsynchronously(
                 this,
                 () -> {
@@ -427,45 +412,35 @@ public class LeaderboardPlugin extends JavaPlugin {
                             cache.reset(board, type);
                         }
                     } catch (ExecutionException | InterruptedException e) {
-                        if(isShuttingDown()) return;
-                        getLogger().log(Level.WARNING, "Unable to reset "+type+": (interupted/exception)", e);
+                        if (isShuttingDown()) return;
+                        getLogger().log(Level.WARNING, "Unable to reset " + type + ": (interupted/exception)", e);
                     }
                 },
-                secsTilNextReset*20L
+                secsTilNextReset * 20L
         ).getTaskId();
         resetIds.put(type, taskId);
     }
 
     public boolean validatePlaceholder(String placeholder, CommandSender sayOutput) {
-        if(Bukkit.getOnlinePlayers().size() == 0) {
+        if (Bukkit.getOnlinePlayers().size() == 0) {
             getLogger().warning("Unable to validate placeholder because no players are online. Skipping validation.");
             return true;
         }
         Player vp = Bukkit.getOnlinePlayers().iterator().next();
-        String out = PlaceholderAPI.setPlaceholders(vp, "%"+ Cache.alternatePlaceholders(placeholder)+"%").replaceAll(",", "");
+        String out = PlaceholderAPI.setPlaceholders(vp, "%" + Cache.alternatePlaceholders(placeholder) + "%").replaceAll(",", "");
         try {
             getPlaceholderFormatter().toDouble(out, placeholder);
-        } catch(NumberFormatException e) {
-            if(sayOutput != null) {
-                sayOutput.sendMessage(message("&7Returned: "+out.replaceAll("§", "&")));
+        } catch (NumberFormatException e) {
+            if (sayOutput != null) {
+                sayOutput.sendMessage(message("&7Returned: " + out.replaceAll("§", "&")));
             }
             return false;
         }
         return true;
     }
 
-    private static MiniMessage miniMessage;
-    public static MiniMessage getMiniMessage() {
-        if(miniMessage == null) {
-            miniMessage = MiniMessage.miniMessage();
-        }
-        return miniMessage;
-    }
-
-    private static BukkitAudiences adventure;
-
     public BukkitAudiences getAdventure() {
-        if(adventure == null) {
+        if (adventure == null) {
             adventure = BukkitAudiences.create(this);
         }
         return adventure;
@@ -476,36 +451,29 @@ public class LeaderboardPlugin extends JavaPlugin {
         DayOfWeek day;
         try {
             day = DayOfWeek.valueOf(rawDay.toUpperCase(Locale.ROOT));
-        } catch(IllegalArgumentException e) {
-            getLogger().warning("Invalid day '"+rawDay+"' for reset-weekly-on in the config! Defaulting to sunday.");
+        } catch (IllegalArgumentException e) {
+            getLogger().warning("Invalid day '" + rawDay + "' for reset-weekly-on in the config! Defaulting to sunday.");
             day = DayOfWeek.SUNDAY;
         }
         TimedType.setWeeklyResetDay(day);
-    }
-
-
-    public static Component message(String miniMessage) {
-        return getMiniMessage().deserialize(Messages.color(miniMessage));
     }
 
     public boolean isShuttingDown() {
         return shuttingDown;
     }
 
-    private long lastTimeAlert = 0;
-    private boolean doublePrevention = false; // without this, in testing, the message appeared twice about 90% of the time
     public void timePlaceholderUsed() {
-        if(doublePrevention) return;
+        if (doublePrevention) return;
         doublePrevention = true;
         long timeAlertCooldown = 30 * TimeUtils.MINUTE;
 
-        if(lastTimeAlert == 0) { // delay first alert by 30 seconds
+        if (lastTimeAlert == 0) { // delay first alert by 30 seconds
             lastTimeAlert = System.currentTimeMillis() - (timeAlertCooldown - (30 * TimeUtils.SECOND));
         }
-        if(System.currentTimeMillis() - lastTimeAlert > timeAlertCooldown) {
+        if (System.currentTimeMillis() - lastTimeAlert > timeAlertCooldown) {
             lastTimeAlert = System.currentTimeMillis();
             for (Player player : Bukkit.getOnlinePlayers()) {
-                if(!player.hasPermission("ajleaderboards.use")) continue;
+                if (!player.hasPermission("ajleaderboards.use")) continue;
                 getAdventure().player(player).sendMessage(message(
                         "&6[&eajLeaderboards&6] &cYou are using a deprecated placeholder! " +
                                 "&7The time placeholder is no longer necessary, and will be removed in the future.\n" +

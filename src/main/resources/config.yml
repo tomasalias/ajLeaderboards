@@ -74,8 +74,7 @@ update-on-join: true
 # For example, you can have a KDR leaderboard, then next to each player on the leaderboard,
 #  you can show their actual kills and deaths
 # More info: https://wiki.ajg0702.us/ajleaderboards/setup/extras/
-extras:
-  - "statistic_player_kills"
+extras: []
 
 # What character should we use for the comma in long numbers?
 # You can also set this to be blank if you don't want commas
@@ -118,11 +117,6 @@ require-zero-validation: true
 
 # In boards listed here, anyone with a score of `0` will not be added to the leaderboard.
 dont-add-zero: []
-
-# Should we get prefixes/suffixes from vault?
-# If vault is not installed, this option does nothing (prefixes/suffixes aren't fetched anyway)
-#  Default: true
-fetch-prefix-suffix-from-vault: true
 
 
 # Debug option to print stuff that could be useful to the developer.
