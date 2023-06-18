@@ -12,7 +12,6 @@ import com.mongodb.client.model.Updates;
 import org.bson.Document;
 import org.bson.UuidRepresentation;
 import org.bson.codecs.configuration.CodecRegistry;
-import org.bson.codecs.pojo.Conventions;
 import org.bson.codecs.pojo.PojoCodecProvider;
 import org.bukkit.OfflinePlayer;
 import org.jetbrains.annotations.Nullable;
@@ -50,8 +49,7 @@ public class MongoDBMethod implements CacheMethod {
     @Override
     public void init(LeaderboardPlugin plugin, ConfigFile config, Cache cacheInstance) {
         CodecRegistry codecRegistry = fromRegistries(MongoClientSettings.getDefaultCodecRegistry(),
-                fromProviders(PojoCodecProvider.builder().conventions(Arrays.asList(Conventions.ANNOTATION_CONVENTION, Conventions.CLASS_AND_PROPERTY_CONVENTION,
-                        Conventions.OBJECT_ID_GENERATORS, Conventions.SET_PRIVATE_FIELDS_CONVENTION)).build()));
+                fromProviders(PojoCodecProvider.builder().automatic(true).build()));
         ConnectionString connString = new ConnectionString(storageConfig.getString("mongoConnectionString"));
         MongoClientSettings settings = MongoClientSettings.builder()
                 .applyConnectionString(connString)
@@ -82,27 +80,30 @@ public class MongoDBMethod implements CacheMethod {
     @Override
     public StatEntry getStatEntry(int position, String board, TimedType type) throws SQLException {
         String sortBy = type == TimedType.ALLTIME ? "value" : type.lowerName() + "_delta";
-        StatEntry result = mongoDatabase.getCollection(tablePrefix + board, StatEntry.class).find()
-                .sort(isReverse(board) ? Sorts.descending(sortBy) : Sorts.ascending(sortBy))
+        Document result = mongoDatabase.getCollection(tablePrefix + board).find()
+                .sort(isReverse(board) ? Sorts.ascending(sortBy) : Sorts.descending(sortBy))
                 .skip(position - 1).first();
-        return result == null ? StatEntry.boardNotFound(this.plugin, position, board, type) : result;
+        return result == null ? StatEntry.boardNotFound(this.plugin, position, board, type) :
+                processStatEntry(result, type, sortBy, position, board);
     }
 
     @Nullable
     @Override
     public StatEntry getStatEntry(OfflinePlayer player, String board, TimedType type) {
         String sortBy = type == TimedType.ALLTIME ? "value" : type.lowerName() + "_delta";
-        StatEntry result = mongoDatabase.getCollection(tablePrefix + board, StatEntry.class)
+        Document result = mongoDatabase.getCollection(tablePrefix + board)
                 .find()
                 .filter(Filters.eq("playerID", player.getUniqueId()))
-                .sort(isReverse(board) ? Sorts.descending(sortBy) : Sorts.ascending(sortBy))
+                .sort(isReverse(board) ? Sorts.ascending(sortBy) : Sorts.descending(sortBy))
                 .first();
-        return result == null ? StatEntry.boardNotFound(this.plugin, -1, board, type) : result;
+        return result == null ? StatEntry.boardNotFound(this.plugin, -1, board, type) :
+                processStatEntry(result, type, sortBy, (int) mongoDatabase.getCollection(tablePrefix + board)
+                        .countDocuments(Filters.gte(sortBy, result.get(sortBy))), board);
     }
 
     @Override
     public int getBoardSize(String board) {
-        return (int) mongoDatabase.getCollection(tablePrefix + board, StatEntry.class).countDocuments();
+        return (int) mongoDatabase.getCollection(tablePrefix + board).countDocuments();
     }
 
     @Override
@@ -145,7 +146,7 @@ public class MongoDBMethod implements CacheMethod {
                     mongoDatabase.getCollection(tablePrefix + board)
                             .updateOne(Filters.eq("playerID", UUID.fromString(idRaw)),
                                     Updates.combine(Updates.set(type.lowerName() + "_lasttotal", uuids.get(idRaw))
-                                            , Updates.set(type.lowerName() + "_delta", 0)
+                                            , Updates.set(type.lowerName() + "_delta", 0D)
                                             , Updates.set(type.lowerName() + "_timestamp", newTime)));
                 }
             } catch (Exception e) {
@@ -343,5 +344,16 @@ public class MongoDBMethod implements CacheMethod {
 
     private boolean isReverse(String board) {
         return storageConfig.getStringList("reverse-sort").contains(board);
+    }
+
+    private StatEntry processStatEntry(Document document, TimedType type, String sortBy, int position, String board) {
+        return new StatEntry(position, board,
+                document.getString("prefix"),
+                document.getString("namecache"),
+                document.getString("displaynamecache"),
+                document.get("playerID", UUID.class),
+                document.getString("suffix"),
+                document.getDouble(sortBy),
+                type);
     }
 }
