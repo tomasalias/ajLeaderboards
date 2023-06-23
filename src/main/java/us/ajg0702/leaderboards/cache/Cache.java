@@ -246,7 +246,7 @@ public class Cache {
 			}
 		}
 
-		method.upsertPlayer(board, player, output, displayName, prefix, suffix);
+		method.upsertPlayer(board, player, output, prefix, suffix, displayName);
 	}
 
 	public long getLastReset(String board, TimedType type) {
