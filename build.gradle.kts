@@ -93,6 +93,11 @@ tasks.shadowJar {
     }
 }
 
+tasks.build {
+    dependsOn(tasks.slimJar)
+    dependsOn(tasks.shadowJar)
+}
+
 publishing {
     publications {
         create<MavenPublication>("mavenJava") {
