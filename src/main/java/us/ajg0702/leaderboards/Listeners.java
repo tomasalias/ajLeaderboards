@@ -1,5 +1,7 @@
 package us.ajg0702.leaderboards;
 
+import net.luckperms.api.LuckPermsProvider;
+import net.luckperms.api.event.player.PlayerLoginProcessEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -15,28 +17,13 @@ public class Listeners implements Listener {
 
     public Listeners(LeaderboardPlugin plugin) {
         this.plugin = plugin;
+        LuckPermsProvider.get().getEventBus().subscribe(this.plugin, PlayerLoginProcessEvent.class, this::onJoin);
     }
 
-    @EventHandler
-    public void onJoin(PlayerJoinEvent e) {
-        if(plugin.getCache().getMethod().getName().equals("sqlite") && e.getPlayer().hasPermission("ajleaderboards.use")) {
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                plugin.getAdventure().player(e.getPlayer())
-                        .sendMessage(message(
-                                "\n&6[ajLeaderboards] &cSQLite is not recommended and will be removed! &7Please switch to h2 for a faster (and more stable) cache storage.\n" +
-                                        "&cSQLite support will be removed in the future!\n" +
-                                        "&7See how to switch without losing data " +
-                                        "<hover:show_text:'<yellow>Click to go to https://wiki.ajg0702.us/ajleaderboards/moving-storage-methods'>" +
-                                        "<click:open_url:'https://wiki.ajg0702.us/ajleaderboards/moving-storage-methods'>" +
-                                        "<white><underlined>here (click me)" +
-                                        "</click>" +
-                                        "</hover>\n"
-                        ));
-            }, 40);
-        }
+    public void onJoin(PlayerLoginProcessEvent e) {
         if(!plugin.getAConfig().getBoolean("update-stats")) return;
         if(!plugin.getAConfig().getBoolean("update-on-join")) return;
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> plugin.getCache().updatePlayerStats(e.getPlayer()));
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> plugin.getCache().updatePlayerStats(Bukkit.getPlayer(e.getUniqueId())));
     }
 
     @EventHandler
