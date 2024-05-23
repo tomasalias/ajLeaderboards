@@ -30,6 +30,7 @@ import java.sql.SQLException;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
@@ -83,7 +84,7 @@ public class MongoDBMethod implements CacheMethod {
         Document result = mongoDatabase.getCollection(tablePrefix + board).find()
                 .sort(isReverse(board) ? Sorts.ascending(sortBy) : Sorts.descending(sortBy))
                 .skip(position - 1).first();
-        return result == null ? StatEntry.boardNotFound(this.plugin, position, board, type) :
+        return result == null ? StatEntry.boardNotFound(position, board, type) :
                 processStatEntry(result, type, sortBy, position, board);
     }
 
@@ -96,7 +97,7 @@ public class MongoDBMethod implements CacheMethod {
                 .filter(Filters.eq("playerID", player.getUniqueId()))
                 .sort(isReverse(board) ? Sorts.ascending(sortBy) : Sorts.descending(sortBy))
                 .first();
-        return result == null ? StatEntry.boardNotFound(this.plugin, -1, board, type) :
+        return result == null ? StatEntry.boardNotFound(-1, board, type) :
                 processStatEntry(result, type, sortBy, (int) mongoDatabase.getCollection(tablePrefix + board)
                         .countDocuments(Filters.gte(sortBy, result.get(sortBy))), board);
     }
@@ -355,5 +356,17 @@ public class MongoDBMethod implements CacheMethod {
                 document.getString("suffix"),
                 document.getDouble(sortBy),
                 type);
+    }
+
+    @Override
+    public int getTotal(String board, TimedType type) {
+        try {
+            return (int) StreamSupport.stream(mongoDatabase.getCollection(tablePrefix + board)
+                    .find()
+                    .map(document -> document.getDouble(type == TimedType.ALLTIME ? "value" : type.lowerName() + "_delta"))
+                    .map(Double::doubleValue).spliterator(), false).mapToDouble(Double::doubleValue).sum();
+        } catch (Exception e) {
+            return 0;
+        }
     }
 }
