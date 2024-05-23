@@ -348,12 +348,14 @@ public class MongoDBMethod implements CacheMethod {
     }
 
     private StatEntry processStatEntry(Document document, TimedType type, String sortBy, int position, String board) {
+        String prefix = document.getString("prefixcache");
+        String suffix = document.getString("suffixcache");
         return new StatEntry(position, board,
-                document.getString("prefix"),
+                prefix == null ? "" : prefix,
                 document.getString("namecache"),
                 document.getString("displaynamecache"),
                 document.get("playerID", UUID.class),
-                document.getString("suffix"),
+                suffix == null ? "" : suffix,
                 document.getDouble(sortBy),
                 type);
     }

@@ -49,6 +49,10 @@ public class BoardSign {
     private Future<Sign> setSign() {
         CompletableFuture<Sign> future = new CompletableFuture<>();
         plugin.getScheduler().runSync(location, () -> {
+            if (!location.isWorldLoaded()) {
+                future.complete(null);
+                return;
+            }
             BlockState state = location.getBlock().getState();
             if(!(state instanceof Sign)) {
                 sign = null;

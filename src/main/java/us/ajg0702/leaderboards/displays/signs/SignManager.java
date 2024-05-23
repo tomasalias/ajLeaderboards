@@ -224,7 +224,7 @@ public class SignManager {
     }
 
     public boolean isSignChunkLoaded(BoardSign sign) {
-        return sign.getWorld().isChunkLoaded(sign.getX(), sign.getZ());
+        return sign.getWorld() != null && sign.getWorld().isChunkLoaded(sign.getX(), sign.getZ());
     }
 
 }
