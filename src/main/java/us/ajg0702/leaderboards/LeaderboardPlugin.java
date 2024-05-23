@@ -78,9 +78,6 @@ public class LeaderboardPlugin extends JavaPlugin {
     private LuckpermsContextLoader contextLoader;
     private ResetSaver resetSaver;
 
-    private boolean vault;
-    private Chat vaultChat;
-
     private boolean shuttingDown = false;
     private long lastTimeAlert = 0;
     private boolean doublePrevention = false; // without this, in testing, the message appeared twice about 90% of the time
