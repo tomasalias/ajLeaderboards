@@ -1,5 +1,9 @@
 package us.ajg0702.leaderboards.cache;
 
+import eu.cloudnetservice.driver.inject.InjectionLayer;
+import eu.cloudnetservice.driver.registry.ServiceRegistry;
+import eu.cloudnetservice.modules.bridge.player.CloudOfflinePlayer;
+import eu.cloudnetservice.modules.bridge.player.PlayerManager;
 import me.clip.placeholderapi.PlaceholderAPI;
 import net.luckperms.api.LuckPermsProvider;
 import net.luckperms.api.cacheddata.CachedMetaData;
@@ -234,7 +238,7 @@ public class Cache {
 		Runnable updateTask = () -> {
 			String realName = player.getName();
 			String displayName = "&7" + player.getName();
-			String prefix = "";
+			String prefix = "&7";
 			String suffix = "";
 			if(player.isOnline() && player.getPlayer() != null) {
 				displayName = player.getPlayer().getDisplayName();
@@ -243,20 +247,20 @@ public class Cache {
 				suffix = metaData.getSuffix();
 			} else {
 				User user = LuckPermsProvider.get().getUserManager().getUser(player.getUniqueId());
-				if (user != null) {
+				if (user == null) {
+					user = LuckPermsProvider.get().getUserManager().loadUser(player.getUniqueId()).join();
+				}
+				if (user != null && user.getUsername() != null) {
 					CachedMetaData metaData = user.getCachedData().getMetaData();
-					realName = user.getUsername();
+					realName = user.getFriendlyName();
 					prefix = metaData.getPrefix();
 					suffix = metaData.getSuffix();
-					displayName = prefix + user.getUsername() + suffix;
+					displayName = (prefix == null ? "" : prefix) + realName + (suffix == null ? "" : suffix);
 				} else {
-					user = LuckPermsProvider.get().getUserManager().loadUser(player.getUniqueId()).join();
-					if (user != null) {
-						CachedMetaData metaData = user.getCachedData().getMetaData();
-						realName = user.getUsername();
-						prefix = metaData.getPrefix();
-						suffix = metaData.getSuffix();
-						displayName = prefix + user.getUsername() + suffix;
+					CloudOfflinePlayer offlinePlayer = InjectionLayer.boot().instance(ServiceRegistry.class).firstProvider(PlayerManager.class).offlinePlayer(player.getUniqueId());
+					if (offlinePlayer != null) {
+						displayName = "&7" + offlinePlayer.name();
+						realName = offlinePlayer.name();
 					}
 				}
 			}

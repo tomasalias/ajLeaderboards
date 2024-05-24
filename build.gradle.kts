@@ -29,6 +29,9 @@ dependencies {
     testImplementation("junit:junit:4.13.1")
     testImplementation("org.spigotmc:spigot-api:1.18.2-R0.1-SNAPSHOT")
 
+    compileOnly(platform("eu.cloudnetservice.cloudnet:bom:4.0.0-RC10"))
+    compileOnly("eu.cloudnetservice.cloudnet:driver")
+    compileOnly("eu.cloudnetservice.cloudnet:bridge")
     implementation("io.github.slimjar:slimjar:1.2.7")
     compileOnly("org.spigotmc:spigot-api:1.18.2-R0.1-SNAPSHOT")
     compileOnly("me.clip:placeholderapi:2.11.1")
@@ -143,6 +146,6 @@ publishing {
 
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
 }
