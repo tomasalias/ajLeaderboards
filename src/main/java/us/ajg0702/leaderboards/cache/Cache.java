@@ -3,7 +3,7 @@ package us.ajg0702.leaderboards.cache;
 import me.clip.placeholderapi.PlaceholderAPI;
 import net.luckperms.api.LuckPermsProvider;
 import net.luckperms.api.cacheddata.CachedMetaData;
-import net.luckperms.api.platform.PlayerAdapter;
+import net.luckperms.api.model.user.User;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
@@ -22,9 +22,6 @@ import us.ajg0702.leaderboards.cache.methods.SqliteMethod;
 import us.ajg0702.leaderboards.utils.BoardPlayer;
 import us.ajg0702.utils.common.ConfigFile;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -232,22 +229,34 @@ public class Cache {
 		}
 		if(debug) Debug.info("Placeholder "+board+" for "+player.getName()+" returned "+output);
 
-		String displayName = player.getName();
-		if(player.isOnline() && player.getPlayer() != null) {
-			displayName = player.getPlayer().getDisplayName();
-		}
-
-        CachedMetaData metaData = LuckPermsProvider.get().getPlayerAdapter(Player.class).getMetaData(player.getPlayer());
-        String prefix = metaData.getPrefix();
-        String suffix = metaData.getSuffix();
-
 		boolean waitedUpdate = Bukkit.isPrimaryThread();
 
-		String finalDisplayName = displayName;
-		String finalSuffix = suffix;
-		String finalPrefix = prefix;
 		Runnable updateTask = () -> {
-
+			String displayName = player.getName();
+			String prefix = "";
+			String suffix = "";
+			if(player.isOnline() && player.getPlayer() != null) {
+				displayName = player.getPlayer().getDisplayName();
+				CachedMetaData metaData = LuckPermsProvider.get().getPlayerAdapter(Player.class).getMetaData(player.getPlayer());
+				prefix = metaData.getPrefix();
+				suffix = metaData.getSuffix();
+			} else {
+				User user = LuckPermsProvider.get().getUserManager().getUser(player.getUniqueId());
+				if (user != null) {
+						CachedMetaData metaData = user.getCachedData().getMetaData();
+						prefix = metaData.getPrefix();
+						suffix = metaData.getSuffix();
+				} else {
+					user = LuckPermsProvider.get().getUserManager().loadUser(player.getUniqueId()).join();
+					if (user != null) {
+						CachedMetaData metaData = user.getCachedData().getMetaData();
+						prefix = metaData.getPrefix();
+						suffix = metaData.getSuffix();
+					}
+				}
+			}
+			if (prefix == null) prefix = "";
+			if (suffix == null) suffix = "";
 			BoardPlayer boardPlayer = new BoardPlayer(board, player);
 
 			if (waitedUpdate) {
@@ -262,9 +271,9 @@ public class Cache {
 			StatEntry cached = plugin.getTopManager().getCachedStatEntry(player, board, TimedType.ALLTIME, plugin.getAConfig().getBoolean("check-cache-on-update"));
 			if (cached != null && cached.hasPlayer() &&
 					cached.getScore() == output &&
-					cached.getPlayerDisplayName().equals(finalDisplayName) &&
-					cached.getPrefix().equals(finalPrefix) &&
-					cached.getSuffix().equals(finalSuffix)
+					cached.getPlayerDisplayName().equals(displayName) &&
+					cached.getPrefix().equals(prefix) &&
+					cached.getSuffix().equals(suffix)
 			) {
 				if (debug)
 					Debug.info("Skipping updating of " + player.getName() + " for " + board + " because their cached score is the same as their current score");
@@ -290,7 +299,7 @@ public class Cache {
 				}
 			}
 
-			method.upsertPlayer(board, player, output, finalPrefix, finalSuffix, finalDisplayName);
+			method.upsertPlayer(board, player, output, prefix, suffix, displayName);
 		};
 		if(Bukkit.isPrimaryThread()) {
 			plugin.getTopManager().submit(updateTask);
