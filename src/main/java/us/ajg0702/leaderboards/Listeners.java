@@ -18,7 +18,7 @@ public class Listeners implements Listener {
     public void onJoin(PlayerJoinEvent e) {
         if(!plugin.getAConfig().getBoolean("update-stats")) return;
         if(!plugin.getAConfig().getBoolean("update-on-join")) return;
-        plugin.getScheduler().runTaskAsynchronously(() -> plugin.getCache().updatePlayerStats(e.getPlayer()));
+        plugin.getScheduler().runTaskLaterAsynchronously(() -> plugin.getCache().updatePlayerStats(e.getPlayer()), 20); // 1 second delay to make sure their prefix loads
     }
 
     @EventHandler
