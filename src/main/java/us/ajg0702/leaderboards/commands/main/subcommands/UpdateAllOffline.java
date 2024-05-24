@@ -5,6 +5,7 @@ import org.bukkit.OfflinePlayer;
 import us.ajg0702.commands.CommandSender;
 import us.ajg0702.commands.SubCommand;
 import us.ajg0702.leaderboards.LeaderboardPlugin;
+import us.ajg0702.leaderboards.cache.Cache;
 import us.ajg0702.leaderboards.utils.OfflineUpdater;
 
 import java.util.Arrays;
@@ -65,7 +66,7 @@ public class UpdateAllOffline extends SubCommand {
                 ));
                 return;
             }
-            OfflinePlayer[] offlinePlayers = Bukkit.getOfflinePlayers();
+            OfflinePlayer[] offlinePlayers = plugin.getCache().getMethod().getStoredPlayerUUIDs(board).stream().map(Bukkit::getOfflinePlayer).toArray(OfflinePlayer[]::new);
             plugin.getOfflineUpdaters().put(board, new OfflineUpdater(plugin, board, offlinePlayers, sender));
             sender.sendMessage(message(
                     "&aStarted update of &f" + offlinePlayers.length + " &aplayers!\n" +

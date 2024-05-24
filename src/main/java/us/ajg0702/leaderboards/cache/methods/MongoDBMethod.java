@@ -371,4 +371,12 @@ public class MongoDBMethod implements CacheMethod {
             return 0;
         }
     }
+
+    @Override
+    public List<UUID> getStoredPlayerUUIDs(String board) {
+        return StreamSupport.stream(mongoDatabase.getCollection(tablePrefix + board)
+                .find()
+                .map(document -> document.get("playerID", UUID.class))
+                .spliterator(), false).collect(Collectors.toList());
+    }
 }

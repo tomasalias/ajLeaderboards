@@ -57,4 +57,6 @@ public interface CacheMethod {
     void createExtraTable();
 
     int getTotal(String board, TimedType type);
+
+    List<UUID> getStoredPlayerUUIDs(String board);
 }

@@ -860,4 +860,10 @@ public abstract class SQLCacheMethod implements CacheMethod {
         }
         return size;
     }
+
+    @Override
+    public List<UUID> getStoredPlayerUUIDs(String board) {
+        // I don't use SQL
+        throw new UnsupportedOperationException("This method is not supported by this cache method.");
+    }
 }

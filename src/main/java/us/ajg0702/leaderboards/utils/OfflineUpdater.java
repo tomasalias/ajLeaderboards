@@ -29,7 +29,12 @@ public class OfflineUpdater {
             startedTime = System.currentTimeMillis();
             while(!offlinePlayerQueue.isEmpty() && !plugin.isShuttingDown()) {
                 OfflinePlayer player = offlinePlayerQueue.pop();
-                plugin.getCache().updateStat(board, player);
+                try {
+                    plugin.getCache().updateStat(board, player);
+                } catch (Exception e) {
+                    plugin.getLogger().warning("[OfflineUpdater] " + board + ": Error updating " + player.getName());
+                    e.printStackTrace();
+                }
             }
             if(plugin.isShuttingDown()) {
                 plugin.getLogger().info("[OfflineUpdater] " + board + ": Canceling due to plugin shutdown");
