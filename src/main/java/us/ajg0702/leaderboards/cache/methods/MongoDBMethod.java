@@ -210,7 +210,7 @@ public class MongoDBMethod implements CacheMethod {
     }
 
     @Override
-    public void upsertPlayer(String board, OfflinePlayer player, double output, String prefix, String suffix, String displayName) {
+    public void upsertPlayer(String board, OfflinePlayer player, double output, String realName, String prefix, String suffix, String displayName) {
         Map<TimedType, Double> lastTotals = new HashMap<>();
         for (TimedType type : TimedType.values()) {
             if (type == TimedType.ALLTIME) continue;
@@ -224,7 +224,7 @@ public class MongoDBMethod implements CacheMethod {
             Document document = new Document();
             document.put("playerID", player.getUniqueId());
             document.put("value", output);
-            document.put("namecache", player.getName());
+            document.put("namecache", realName);
             document.put("prefixcache", prefix);
             document.put("suffixcache", suffix);
             document.put("displaynamecache", displayName);
@@ -266,7 +266,7 @@ public class MongoDBMethod implements CacheMethod {
             Document document = new Document();
             document.put("playerID", player.getUniqueId());
             document.put("value", output);
-            document.put("namecache", player.getName());
+            document.put("namecache", realName);
             document.put("prefixcache", prefix);
             document.put("suffixcache", suffix);
             document.put("displaynamecache", displayName);

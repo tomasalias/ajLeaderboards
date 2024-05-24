@@ -232,7 +232,8 @@ public class Cache {
 		boolean waitedUpdate = Bukkit.isPrimaryThread();
 
 		Runnable updateTask = () -> {
-			String displayName = player.getName();
+			String realName = player.getName();
+			String displayName = "&7" + player.getName();
 			String prefix = "";
 			String suffix = "";
 			if(player.isOnline() && player.getPlayer() != null) {
@@ -243,15 +244,19 @@ public class Cache {
 			} else {
 				User user = LuckPermsProvider.get().getUserManager().getUser(player.getUniqueId());
 				if (user != null) {
-						CachedMetaData metaData = user.getCachedData().getMetaData();
-						prefix = metaData.getPrefix();
-						suffix = metaData.getSuffix();
+					CachedMetaData metaData = user.getCachedData().getMetaData();
+					realName = user.getUsername();
+					prefix = metaData.getPrefix();
+					suffix = metaData.getSuffix();
+					displayName = prefix + user.getUsername() + suffix;
 				} else {
 					user = LuckPermsProvider.get().getUserManager().loadUser(player.getUniqueId()).join();
 					if (user != null) {
 						CachedMetaData metaData = user.getCachedData().getMetaData();
+						realName = user.getUsername();
 						prefix = metaData.getPrefix();
 						suffix = metaData.getSuffix();
+						displayName = prefix + user.getUsername() + suffix;
 					}
 				}
 			}
@@ -299,7 +304,7 @@ public class Cache {
 				}
 			}
 
-			method.upsertPlayer(board, player, output, prefix, suffix, displayName);
+			method.upsertPlayer(board, player, output, realName, prefix, suffix, displayName);
 		};
 		if(Bukkit.isPrimaryThread()) {
 			plugin.getTopManager().submit(updateTask);

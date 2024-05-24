@@ -353,7 +353,7 @@ public abstract class SQLCacheMethod implements CacheMethod {
     }
 
     @Override
-    public void upsertPlayer(String board, OfflinePlayer player, double output, String prefix, String suffix, String displayName) {
+    public void upsertPlayer(String board, OfflinePlayer player, double output, String realName, String prefix, String suffix, String displayName) {
         Map<TimedType, Double> lastTotals = new HashMap<>();
         for (TimedType type : TimedType.values()) {
             if (type == TimedType.ALLTIME) continue;
@@ -367,7 +367,7 @@ public abstract class SQLCacheMethod implements CacheMethod {
                 ));
                 statement.setString(1, player.getUniqueId().toString());
                 statement.setDouble(2, output);
-                statement.setString(3, player.getName());
+                statement.setString(3, realName);
                 statement.setString(4, prefix);
                 statement.setString(5, suffix);
                 statement.setString(6, displayName);
@@ -392,7 +392,7 @@ public abstract class SQLCacheMethod implements CacheMethod {
                         getTablePrefix() + board
                 ))) {
                     statement.setDouble(1, output);
-                    statement.setString(2, player.getName());
+                    statement.setString(2, realName);
                     statement.setString(3, prefix);
                     statement.setString(4, suffix);
                     statement.setString(5, displayName);

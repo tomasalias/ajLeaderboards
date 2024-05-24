@@ -42,7 +42,7 @@ public interface CacheMethod {
 
     boolean removePlayer(String board, String playerName);
 
-    void upsertPlayer(String board, OfflinePlayer player, double output, String prefix, String suffix, String displayName);
+    void upsertPlayer(String board, OfflinePlayer player, double output, String realName, String prefix, String suffix, String displayName);
 
     boolean removeBoard(String board);
 
