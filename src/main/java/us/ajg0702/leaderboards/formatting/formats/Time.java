@@ -80,7 +80,6 @@ public class Time extends Format {
             temp = temp.replace(replacesEntry.getKey(), replacesEntry.getValue());
         }
 
-
         boolean matches = fullPattern.matcher(temp.replaceAll(" ", "")).matches();
         Debug.info("[Format: Time] '" + output + "' matches: " + matches);
         return matches;

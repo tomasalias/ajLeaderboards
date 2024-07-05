@@ -38,6 +38,8 @@ import us.ajg0702.leaderboards.placeholders.PlaceholderExpansion;
 import us.ajg0702.leaderboards.utils.*;
 import us.ajg0702.utils.common.Config;
 import us.ajg0702.utils.common.Messages;
+import us.ajg0702.utils.common.UpdateManager;
+import us.ajg0702.utils.common.UtilsLogger;
 import us.ajg0702.utils.foliacompat.CompatScheduler;
 import us.ajg0702.utils.foliacompat.Task;
 
@@ -81,6 +83,9 @@ public class LeaderboardPlugin extends JavaPlugin {
     private boolean shuttingDown = false;
     private long lastTimeAlert = 0;
     private boolean doublePrevention = false; // without this, in testing, the message appeared twice about 90% of the time
+
+    private UpdateManager updateManager = null;
+
     private final CompatScheduler compatScheduler = new CompatScheduler(this);
 
     public static MiniMessage getMiniMessage() {
@@ -162,7 +167,7 @@ public class LeaderboardPlugin extends JavaPlugin {
 
         signManager = new SignManager(this);
         headManager = new HeadManager(this);
-        headUtils = new HeadUtils(getLogger());
+        headUtils = new HeadUtils(getLogger(), new Debug(), compatScheduler);
         armorStandManager = new ArmorStandManager(this);
 
         resetSaver = new ResetSaver(this);
@@ -201,6 +206,10 @@ public class LeaderboardPlugin extends JavaPlugin {
         contextLoader.checkReload();
 
         Bukkit.getPluginManager().registerEvents(new Listeners(this), this);
+
+        if(config.getBoolean("enable-updater")) {
+            updateManager = new UpdateManager(utilsLogger, getDescription().getVersion(), "ajLeaderboards", "ajLeaderboards", null, getDataFolder().getParentFile(), "ajLeaderboards update");
+        }
 
         getLogger().info("ajLeaderboards v" + getDescription().getVersion() + " by ajgeiss0702 enabled!");
     }
@@ -523,4 +532,31 @@ public class LeaderboardPlugin extends JavaPlugin {
         }
         return future;
     }
+
+    private UtilsLogger utilsLogger = new UtilsLogger() {
+        @Override
+        public void warn(String s) {
+            getLogger().warning(s);
+        }
+
+        @Override
+        public void warning(String s) {
+            getLogger().warning(s);
+        }
+
+        @Override
+        public void info(String s) {
+            getLogger().info(s);
+        }
+
+        @Override
+        public void error(String s) {
+            getLogger().severe(s);
+        }
+
+        @Override
+        public void severe(String s) {
+            getLogger().severe(s);
+        }
+    };
 }
