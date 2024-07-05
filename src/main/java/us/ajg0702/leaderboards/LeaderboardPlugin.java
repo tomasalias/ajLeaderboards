@@ -84,6 +84,10 @@ public class LeaderboardPlugin extends JavaPlugin {
     private long lastTimeAlert = 0;
     private boolean doublePrevention = false; // without this, in testing, the message appeared twice about 90% of the time
 
+    public UpdateManager getUpdateManager() {
+        return updateManager;
+    }
+
     private UpdateManager updateManager = null;
 
     private final CompatScheduler compatScheduler = new CompatScheduler(this);
