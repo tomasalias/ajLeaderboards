@@ -1,8 +1,5 @@
 package us.ajg0702.leaderboards;
 
-import io.github.slimjar.app.builder.ApplicationBuilder;
-import io.github.slimjar.resolver.data.Repository;
-import io.github.slimjar.resolver.mirrors.SimpleMirrorSelector;
 import me.clip.placeholderapi.PlaceholderAPI;
 import net.kyori.adventure.platform.bukkit.BukkitAudiences;
 import net.kyori.adventure.text.Component;
@@ -35,7 +32,10 @@ import us.ajg0702.leaderboards.formatting.PlaceholderFormatter;
 import us.ajg0702.leaderboards.loaders.MessageLoader;
 import us.ajg0702.leaderboards.nms.legacy.HeadUtils;
 import us.ajg0702.leaderboards.placeholders.PlaceholderExpansion;
-import us.ajg0702.leaderboards.utils.*;
+import us.ajg0702.leaderboards.utils.Exporter;
+import us.ajg0702.leaderboards.utils.Metrics;
+import us.ajg0702.leaderboards.utils.OfflineUpdater;
+import us.ajg0702.leaderboards.utils.ResetSaver;
 import us.ajg0702.utils.common.Config;
 import us.ajg0702.utils.common.Messages;
 import us.ajg0702.utils.common.UpdateManager;
@@ -43,13 +43,6 @@ import us.ajg0702.utils.common.UtilsLogger;
 import us.ajg0702.utils.foliacompat.CompatScheduler;
 import us.ajg0702.utils.foliacompat.Task;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.security.NoSuchAlgorithmException;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -64,10 +57,13 @@ public class LeaderboardPlugin extends JavaPlugin {
     private static MiniMessage miniMessage;
     private static BukkitAudiences adventure;
     final HashMap<TimedType, Integer> resetIds = new HashMap<>();
+    final HashMap<TimedType, Task> resetTasks = new HashMap<>();
     private final Exporter exporter = new Exporter(this);
     private final PlaceholderFormatter placeholderFormatter = new PlaceholderFormatter(this);
     private final Map<String, OfflineUpdater> offlineUpdaters = new ConcurrentHashMap<>();
+    private final CompatScheduler compatScheduler = new CompatScheduler(this);
     int updateTaskId = -1;
+    Task updateTask;
     private Config config;
     private Cache cache;
     private ExtraManager extraManager;
@@ -79,18 +75,36 @@ public class LeaderboardPlugin extends JavaPlugin {
     private ArmorStandManager armorStandManager;
     private LuckpermsContextLoader contextLoader;
     private ResetSaver resetSaver;
-
     private boolean shuttingDown = false;
     private long lastTimeAlert = 0;
     private boolean doublePrevention = false; // without this, in testing, the message appeared twice about 90% of the time
-
-    public UpdateManager getUpdateManager() {
-        return updateManager;
-    }
-
     private UpdateManager updateManager = null;
+    private final UtilsLogger utilsLogger = new UtilsLogger() {
+        @Override
+        public void warn(String s) {
+            getLogger().warning(s);
+        }
 
-    private final CompatScheduler compatScheduler = new CompatScheduler(this);
+        @Override
+        public void warning(String s) {
+            getLogger().warning(s);
+        }
+
+        @Override
+        public void info(String s) {
+            getLogger().info(s);
+        }
+
+        @Override
+        public void error(String s) {
+            getLogger().severe(s);
+        }
+
+        @Override
+        public void severe(String s) {
+            getLogger().severe(s);
+        }
+    };
 
     public static MiniMessage getMiniMessage() {
         if (miniMessage == null) {
@@ -103,19 +117,8 @@ public class LeaderboardPlugin extends JavaPlugin {
         return getMiniMessage().deserialize(Messages.color(miniMessage));
     }
 
-    @Override
-    public void onLoad() {
-        try {
-            Path downloadPath = Paths.get(getDataFolder().getPath() + File.separator + "libs");
-            ApplicationBuilder.appending("ajLeaderboards")
-                    .logger(new SlimJarLogger(this))
-                    .downloadDirectoryPath(downloadPath)
-                    .mirrorSelector((a, b) -> a)
-                    .internalRepositories(Collections.singleton(new Repository(new URL(SimpleMirrorSelector.ALT_CENTRAL_URL))))
-                    .build();
-        } catch (IOException | ReflectiveOperationException | URISyntaxException | NoSuchAlgorithmException e) {
-            e.printStackTrace();
-        }
+    public UpdateManager getUpdateManager() {
+        return updateManager;
     }
 
     @Override
@@ -211,7 +214,7 @@ public class LeaderboardPlugin extends JavaPlugin {
 
         Bukkit.getPluginManager().registerEvents(new Listeners(this), this);
 
-        if(config.getBoolean("enable-updater")) {
+        if (config.getBoolean("enable-updater")) {
             updateManager = new UpdateManager(utilsLogger, getDescription().getVersion(), "ajLeaderboards", "ajLeaderboards", null, getDataFolder().getParentFile(), "ajLeaderboards update");
         }
 
@@ -251,7 +254,7 @@ public class LeaderboardPlugin extends JavaPlugin {
             }
         }
 
-        if(!fastShutdown) {
+        if (!fastShutdown) {
             getLogger().info("Killing remaining workers");
             killWorkers(1000);
             Debug.info("1st kill pass done, retrying for remaining");
@@ -265,7 +268,7 @@ public class LeaderboardPlugin extends JavaPlugin {
         getLogger().info("ajLeaderboards v" + getDescription().getVersion() + " disabled.");
 
         getScheduler().getActiveWorkers().forEach(bukkitWorker -> {
-            Debug.info("Active worker: "+bukkitWorker.getOwner().getDescription().getName()+" "+bukkitWorker.getTaskId());
+            Debug.info("Active worker: " + bukkitWorker.getOwner().getDescription().getName() + " " + bukkitWorker.getTaskId());
             for (StackTraceElement stackTraceElement : bukkitWorker.getThread().getStackTrace()) {
                 Debug.info(" - " + stackTraceElement);
             }
@@ -358,17 +361,17 @@ public class LeaderboardPlugin extends JavaPlugin {
         return getCompatScheduler();
     }
 
-    Task updateTask;
     public void reloadInterval() {
-        if(updateTask != null) {
+        if (updateTask != null) {
             try {
                 updateTask.cancel();
-            } catch(IllegalArgumentException ignored) {}
+            } catch (IllegalArgumentException ignored) {
+            }
             updateTask = null;
         }
         updateTask = getScheduler().runTaskTimerAsynchronously(() -> {
-            if(!config.getBoolean("update-stats")) return;
-            if(getTopManager().getFetchingAverage() > 100) {
+            if (!config.getBoolean("update-stats")) return;
+            if (getTopManager().getFetchingAverage() > 100) {
                 getLogger().warning("Database is overloaded! Skipping update of players.");
                 return;
             }
@@ -376,10 +379,9 @@ public class LeaderboardPlugin extends JavaPlugin {
                 if (isShuttingDown()) return;
                 getTopManager().submit(() -> getCache().updatePlayerStats(p));
             }
-        }, 10*20, config.getInt("stat-refresh"));
+        }, 10 * 20, config.getInt("stat-refresh"));
     }
 
-    final HashMap<TimedType, Task> resetTasks = new HashMap<>();
     public void scheduleResets() {
         resetTasks.values().forEach(Task::cancel);
         resetTasks.clear();
@@ -529,38 +531,11 @@ public class LeaderboardPlugin extends JavaPlugin {
         Runnable runnable = () -> {
             future.complete(location.getBlock().getType());
         };
-        if(CompatScheduler.isFolia()) {
+        if (CompatScheduler.isFolia()) {
             getScheduler().runSync(location, runnable);
         } else {
             runnable.run();
         }
         return future;
     }
-
-    private UtilsLogger utilsLogger = new UtilsLogger() {
-        @Override
-        public void warn(String s) {
-            getLogger().warning(s);
-        }
-
-        @Override
-        public void warning(String s) {
-            getLogger().warning(s);
-        }
-
-        @Override
-        public void info(String s) {
-            getLogger().info(s);
-        }
-
-        @Override
-        public void error(String s) {
-            getLogger().severe(s);
-        }
-
-        @Override
-        public void severe(String s) {
-            getLogger().severe(s);
-        }
-    };
 }

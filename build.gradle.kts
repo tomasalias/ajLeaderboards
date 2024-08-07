@@ -1,8 +1,7 @@
 plugins {
     java
     `maven-publish`
-    id("com.github.johnrengelman.shadow").version("8.1.1")
-    id("io.github.slimjar").version("1.3.0")
+    id("io.github.goooler.shadow") version "8.1.8"
 }
 
 group = "us.ajg0702"
@@ -27,13 +26,12 @@ repositories {
 
 dependencies {
     testImplementation("junit:junit:4.13.1")
-    testImplementation("org.spigotmc:spigot-api:1.18.2-R0.1-SNAPSHOT")
+    testImplementation("io.papermc.paper:paper-api:1.20.6-R0.1-SNAPSHOT")
 
     compileOnly(platform("eu.cloudnetservice.cloudnet:bom:4.0.0-RC10"))
     compileOnly("eu.cloudnetservice.cloudnet:driver")
     compileOnly("eu.cloudnetservice.cloudnet:bridge")
-    implementation("io.github.slimjar:slimjar:1.2.7")
-    compileOnly("org.spigotmc:spigot-api:1.18.2-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:1.20.6-R0.1-SNAPSHOT")
     compileOnly("me.clip:placeholderapi:2.11.1")
     compileOnly("org.xerial:sqlite-jdbc:3.32.3.2")
     compileOnly("org.spongepowered:configurate-yaml:4.0.0")
@@ -56,9 +54,9 @@ dependencies {
     implementation(project(":nms:nms-19"))
 
 
-    slim("com.zaxxer:HikariCP:3.4.5")
-    slim("com.h2database:h2:2.1.214")
-    slim("org.mongodb:mongodb-driver-sync:4.9.1")
+    compileOnly("com.zaxxer:HikariCP:5.1.0")
+    compileOnly("com.h2database:h2:2.3.230")
+    compileOnly("org.mongodb:mongodb-driver-sync:5.1.1")
     //implementation("io.prometheus", "simpleclient", "0.9.0")
 }
 
@@ -78,16 +76,9 @@ tasks.withType<ProcessResources> {
     )
 }
 
-tasks.slimJar {
-    relocate("org.h2", "us.ajg0702.leaderboards.libs.h2")
-    relocate("com.zaxxer.hikari", "us.ajg0702.leaderboards.libs.hikari")
-    relocate("org.mongodb", "us.ajg0702.leaderboards.libs.mongodb")
-}
-
 tasks.shadowJar {
     relocate("us.ajg0702.utils", "us.ajg0702.leaderboards.libs.utils")
     relocate("us.ajg0702.commands", "us.ajg0702.leaderboards.commands.base")
-    relocate("io.github.slimjar", "us.ajg0702.leaderboards.libs.slimjar")
     relocate("net.kyori", "us.ajg0702.leaderboards.libs.kyori")
     relocate("org.bstats", "us.ajg0702.leaderboards.libs.bstats")
     relocate("org.spongepowered", "us.ajg0702.leaderboards.libs")
@@ -115,7 +106,6 @@ tasks.shadowJar {
 }
 
 tasks.build {
-    dependsOn(tasks.slimJar)
     dependsOn(tasks.shadowJar)
 }
 
@@ -146,6 +136,6 @@ publishing {
 
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }

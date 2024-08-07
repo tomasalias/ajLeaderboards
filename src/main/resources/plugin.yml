@@ -16,3 +16,7 @@ permissions:
    ajleaderboards.use:
       description: Allows you to set up the plugin
       default: op
+libraries:
+   - com.zaxxer:HikariCP:5.1.0
+   - com.h2database:h2:2.3.230
+   - org.mongodb:mongodb-driver-sync:5.1.1

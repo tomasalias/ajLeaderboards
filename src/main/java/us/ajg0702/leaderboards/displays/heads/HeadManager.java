@@ -1,9 +1,8 @@
 package us.ajg0702.leaderboards.displays.heads;
 
-import org.apache.commons.lang.Validate;
+import org.apache.commons.lang3.Validate;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Sign;
@@ -138,28 +137,13 @@ public class HeadManager {
 
         Debug.info("Updating head with "+id);
 
-        OfflinePlayer op = VersionSupport.getMinorVersion() > 9 ? Bukkit.getOfflinePlayer(id) : null;
+        plugin.getScheduler().runSync(loc, () -> {
+            BlockState bs = loc.getBlock().getState();
+            if(!(bs instanceof Skull skull)) return;
 
-        if(plugin.getHeadUtils().getVersionedHeadUtils() != null) {
-            plugin.getScheduler().runTaskAsynchronously(
-                    () -> plugin.getHeadUtils().getVersionedHeadUtils().setHeadBlock(loc.getBlock(), id, name)
-            );
-        } else {
-            plugin.getScheduler().runSync(loc, () -> {
-                BlockState bs = loc.getBlock().getState();
-                if(!(bs instanceof Skull)) return;
-
-                Skull skull = (Skull) bs;
-                if(VersionSupport.getMinorVersion() > 9) {
-                    assert op != null;
-                    skull.setOwningPlayer(op);
-                } else {
-                    //noinspection deprecation
-                    skull.setOwner(name);
-                }
-                skull.update();
-            });
-        }
+            skull.setPlayerProfile(Bukkit.getServer().createProfile(id));
+            skull.update();
+        });
         headLocationCache.put(loc, id);
     }
 }
