@@ -549,6 +549,7 @@ public class Cache {
 			outputraw = PlaceholderAPI.setPlaceholders(player, "%"+alternatePlaceholders(board)+"%")
 					.replaceAll(",", "");
 			output = plugin.getPlaceholderFormatter().toDouble(outputraw, board);
+			if(Double.isNaN(output)) throw new NumberFormatException("Placeholder returned NaN");
 		} catch(NumberFormatException e) {
 			if(debug) Debug.info("Placeholder %"+board+"% for "+player.getName()+" returned a non-number! Ignoring it. Message: " + e);
 			return;
