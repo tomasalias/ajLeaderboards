@@ -550,6 +550,7 @@ public class Cache {
 					.replaceAll(",", "");
 			output = plugin.getPlaceholderFormatter().toDouble(outputraw, board);
 			if(Double.isNaN(output)) throw new NumberFormatException("Placeholder returned NaN");
+			if(Double.isInfinite(output)) throw new NumberFormatException("Placeholder returned Infinite");
 		} catch(NumberFormatException e) {
 			if(debug) Debug.info("Placeholder %"+board+"% for "+player.getName()+" returned a non-number! Ignoring it. Message: " + e);
 			return;
