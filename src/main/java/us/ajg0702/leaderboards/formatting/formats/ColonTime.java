@@ -4,14 +4,46 @@ import us.ajg0702.leaderboards.Debug;
 import us.ajg0702.leaderboards.formatting.Format;
 
 import java.text.DecimalFormat;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class ColonTime extends Format {
 
+    private static final List<String> knownColonTimePlaceholders = Arrays.asList(
+            "parkour_player_personal_best_*_time"
+    );
+
+    private boolean isKnownTimePlaceholder(String placeholder) {
+        boolean is = false;
+        for (String knownTimePlaceholder : knownColonTimePlaceholders) {
+            if(knownTimePlaceholder.contains("*")) {
+                if(knownTimePlaceholder.endsWith("*")) {
+                    is = placeholder.startsWith(knownTimePlaceholder.substring(0, knownTimePlaceholder.length() - 1));
+                } else {
+                    String[] parts = knownTimePlaceholder.split("\\*");
+                    is = placeholder.startsWith(parts[0]) && placeholder.endsWith(parts[1]);
+                }
+            } else {
+                is = placeholder.equals(knownTimePlaceholder);
+            }
+            if(is) break;
+        }
+
+        return is;
+    }
+
     private final Pattern pattern = Pattern.compile("(([0-9]*):)?([0-9][0-9]?):([0-9][0-9]?)((:|\\.)([0-9][0-9]?[0-9]?))?$");
     @Override
     public boolean matches(String output, String placeholder) {
+        if(isKnownTimePlaceholder(placeholder.toLowerCase(Locale.ROOT))) {
+            // don't bother with more expensive checks below if we know it's a time placeholder
+            // let me know about any other placeholders that should be here!
+            return true;
+        }
+
         if(output == null) return false;
         boolean matches = pattern.matcher(output).matches();
         Debug.info("[Format: ColonTime] '" + output + "' matches: " + matches);
