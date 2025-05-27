@@ -146,6 +146,8 @@ fetch-prefix-suffix-from-vault: true
 
 # Should we include seconds in the time format?
 # This only effects things that display the value directly from ajLeaderboards
+# For example, with true:  1d 3h 21m 2s
+#              with false: 1d 3h 21m
 #  Default: true
 time-format-display-seconds: true
 
@@ -236,7 +238,7 @@ fetching-thread-pool-keep-alive: 500
 
 
 # Don't touch this
-config-version: 35
+config-version: 36
 
 # ----- THESE OPTIONS HAVE MOVED -----
 # to messages.yml. They will be removed from here in the future.
