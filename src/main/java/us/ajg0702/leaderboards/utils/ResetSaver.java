@@ -34,7 +34,17 @@ public class ResetSaver {
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
     private final SimpleDateFormat timeDateFormat = new SimpleDateFormat("yyyy-MM-dd_'h'HH'm'mm");
 
-    private final List<String> illegalFileNameChars = Arrays.asList(":", ",", File.separator);
+    private final List<String> illegalFileNameChars = Arrays.asList(
+            ":",
+            ",",
+            File.separator,
+            "<",
+            ">",
+            "\"",
+            "|",
+            "?",
+            "*"
+    );
 
     public void save(String board, TimedType type) {
 
