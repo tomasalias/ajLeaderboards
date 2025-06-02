@@ -2,7 +2,6 @@ package us.ajg0702.leaderboards.utils;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import us.ajg0702.leaderboards.Debug;
 import us.ajg0702.leaderboards.LeaderboardPlugin;
@@ -20,7 +19,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.logging.Level;
-import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class ResetSaver {
@@ -87,7 +86,7 @@ public class ResetSaver {
         );
         File file = new File(folder,
                         board.replaceAll(
-                                "(" + illegalFileNameChars.stream().map(Matcher::quoteReplacement).collect(Collectors.joining("|")) + ")",
+                                "(" + illegalFileNameChars.stream().map(Pattern::quote).collect(Collectors.joining("|")) + ")",
                                 "_"
                         ) +
                         "_" + type.lowerName() + "_" + date + ".json"
