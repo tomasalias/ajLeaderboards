@@ -136,6 +136,13 @@ only-update: []
 #  Default: true
 require-zero-validation: true
 
+# Which boards should we always show a decimal, even if its zero?
+# For example, if you want a KDR leaderboard to include a decimal even if the player's KDR is a whole number, add the board name here.
+# If you want to make sure more than one decimal place is always displayed, you can also specify that by adding % and then a number after the board name.
+# For example, if you want to always display a minimum of 1 decimal place for the board called "kdr_ratio" then you would add "kdr_ratio" to the list below.
+#   And if you want to make sure that the board called "vault_eco_balance" always shows 2 decimal places, you would add "vault_eco_balance%2" below.
+show-zero-decimal: []
+
 # In boards listed here, anyone with a score of `0` will not be added to the leaderboard.
 dont-add-zero: []
 

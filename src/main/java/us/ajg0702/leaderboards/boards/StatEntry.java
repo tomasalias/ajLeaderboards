@@ -282,9 +282,11 @@ public class StatEntry {
 		}
 		return TimeUtils.formatTimeSeconds(Math.round(getScore()));
 	}
-	
-	
+
 	public static String addCommas(double number) {
+		return addCommas(number, null);
+	}
+	public static String addCommas(double number, @Nullable String board) {
 		boolean useComma = true;
 		char comma = 0;
 		char decimal;
@@ -304,6 +306,28 @@ public class StatEntry {
 		symbols.setDecimalSeparator(decimal);
 		DecimalFormat df = new DecimalFormat("#,###.##", symbols);
 		df.setGroupingUsed(useComma);
+		if(board != null) {
+			for (String s : plugin.getAConfig().getStringList("show-zero-decimal")) {
+				if(s.startsWith("%") || s.endsWith("%")) {
+					plugin.getLogger().warning("Invalid entry for show-zero-decimal '"+ s +"'. Make sure to not include '%' in the board name!");
+					continue;
+				}
+				if(!s.toLowerCase().startsWith(board.toLowerCase())) continue;
+				int minDecimals = 1;
+				if(s.contains("%")) {
+					String[] parts = s.split("%");
+					String realBoard = parts[0];
+					String rawMin = parts[1];
+					if(realBoard.equalsIgnoreCase(board)) continue;
+					try {
+						minDecimals = Integer.parseInt(rawMin);
+					} catch (NumberFormatException e) {
+						plugin.getLogger().warning("Invalid entry for show-zero-decimal '"+ s +"'. The minimum decimals, if specified, must be a number!");
+					}
+				}
+				df.setMinimumFractionDigits(minDecimals);
+			}
+		}
 		return df.format(number);
 	}
 
