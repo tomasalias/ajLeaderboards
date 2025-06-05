@@ -245,7 +245,7 @@ fetching-thread-pool-keep-alive: 500
 
 
 # Don't touch this
-config-version: 36
+config-version: 37
 
 # ----- THESE OPTIONS HAVE MOVED -----
 # to messages.yml. They will be removed from here in the future.
