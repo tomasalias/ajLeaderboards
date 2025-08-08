@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.configuration.file.YamlConfiguration;
 import us.ajg0702.leaderboards.Debug;
 import us.ajg0702.leaderboards.LeaderboardPlugin;
@@ -227,7 +228,9 @@ public class SignManager {
     }
 
     public boolean isSignChunkLoaded(BoardSign sign) {
-        return sign.getWorld().isChunkLoaded(sign.getX(), sign.getZ());
+        World world = sign.getWorld();
+        if(world == null) return false;
+        return world.isChunkLoaded(sign.getX(), sign.getZ());
     }
 
 }
