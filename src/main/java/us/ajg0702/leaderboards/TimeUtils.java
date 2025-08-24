@@ -30,14 +30,14 @@ public class TimeUtils {
     public static final long WEEK = DAY * 7L;
 
     public static String formatTimeSeconds(long timeSeconds) {
-        return formatTimeMs(timeSeconds*1000, true);
+        return formatTimeMs(timeSeconds*1000, true, true);
     }
-    public static String formatTimeSeconds(long timeSeconds, boolean withSeconds) {
-        return formatTimeMs(timeSeconds*1000, withSeconds);
+    public static String formatTimeSeconds(long timeSeconds, boolean withSeconds, boolean withWeeks) {
+        return formatTimeMs(timeSeconds*1000, withSeconds, withWeeks);
     }
-    public static String formatTimeMs(long timeMs, boolean withSeconds) {
-        int weeks = (int) (timeMs / WEEK);
-        int days = (int) ((timeMs % WEEK) / DAY);
+    public static String formatTimeMs(long timeMs, boolean withSeconds, boolean withWeeks) {
+        int weeks = withWeeks ? (int) (timeMs / WEEK) : 0;
+        int days = withWeeks ? (int) ((timeMs % WEEK) / DAY) : (int) (timeMs / DAY);
         int hours = (int) ((timeMs % DAY) / HOUR);
         int minutes = (int) ((timeMs % HOUR) / MINUTE);
         int seconds = (int) ((timeMs % MINUTE) / SECOND);

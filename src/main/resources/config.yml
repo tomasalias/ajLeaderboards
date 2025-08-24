@@ -158,6 +158,11 @@ fetch-prefix-suffix-from-vault: true
 #  Default: true
 time-format-display-seconds: true
 
+# Similar to the above option, but with weeks instead.
+# For example, with true:  2w 3d 20h 4m 8s
+#              with false:   17d 20h 4m 8s
+time-format-display-weeks: true
+
 # Allows setting custom bytebin location and webviewer link
 # You should only need to change these if you don't want /ajlb viewer to send the data to my servers
 #  (which is only kept for 90 days or less, and you can contact me to delete sooner if you'd like)
