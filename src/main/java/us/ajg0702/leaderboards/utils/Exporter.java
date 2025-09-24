@@ -24,6 +24,9 @@ public class Exporter {
     }
 
     public JsonObject export(@Nullable Audience reportTo) {
+        return export(reportTo, null);
+    }
+    public JsonObject export(@Nullable Audience reportTo, @Nullable List<String> boards) {
         if(reportTo != null) reportTo.sendMessage(plugin.getMessages().getComponent("commands.export.starting"));
         String takerUUID = "f78a4d8d-d51b-4b39-98a3-230f2de0c670";
         String takerName = "Console";
@@ -36,13 +39,13 @@ public class Exporter {
 
         HashMap<String, List<DbRow>> rows = new HashMap<>();
         int i = 0;
-        List<String> boards = plugin.getCache().getBoards();
-        for(String board : boards) {
+        List<String> allBoards = boards == null ? plugin.getCache().getBoards() : boards;
+        for(String board : allBoards) {
             try {
                 DbRow.clearPositionCache();
                 rows.put(board, plugin.getCache().getRows(board));
-                if(reportTo != null) reportTo.sendMessage(plugin.getMessages().getComponent("commands.export.progress", "DONE:"+ ++i, "TOTAL:"+boards.size()));
-                plugin.getLogger().info(String.format("Export progress: %d/%d fetched", i, boards.size()));
+                if(reportTo != null) reportTo.sendMessage(plugin.getMessages().getComponent("commands.export.progress", "DONE:"+ ++i, "TOTAL:"+allBoards.size()));
+                plugin.getLogger().info(String.format("Export progress: %d/%d fetched", i, allBoards.size()));
             } catch (SQLException e) {
                 plugin.getLogger().log(Level.SEVERE, "An error occurred while fetching rows from the database:", e);
                 return null;

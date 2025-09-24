@@ -17,6 +17,7 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.logging.Level;
@@ -30,13 +31,14 @@ public class Viewer extends SubCommand {
 
     @Override
     public List<String> autoComplete(CommandSender sender, String[] args) {
-        return Collections.emptyList();
+        return filterCompletion(plugin.getTopManager().getBoards(), args[0]);
     }
 
     @Override
     public void execute(CommandSender sender, String[] args, String label) {
         plugin.getScheduler().runTaskAsynchronously(() -> {
-            JsonObject obj = plugin.getExporter().export(sender);
+            List<String> boards = args.length == 0 ? null : Arrays.asList(args);
+            JsonObject obj = plugin.getExporter().export(sender, boards);
             if(obj == null) {
                 sender.sendMessage(plugin.getMessages().getComponent("commands.export.fail"));
                 return;
