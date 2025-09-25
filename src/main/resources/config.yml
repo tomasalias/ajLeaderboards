@@ -212,9 +212,10 @@ min-player-cache-time: 5000
 # This is ignored on mysql (and maxConnections is used for this instead)
 # Lower this if you get the message "unable to create native thread: possibly out of memory or process/resource limits reached"
 # I would __not__ recommend setting this below 16.
+# On multi-threaded server implementations (like Paper forks), consider lowering this value to 32-40 to prevent resource exhaustion.
 # Requires a server restart to change
-#  Default: 70
-max-fetching-threads: 70
+#  Default: 40 (reduced from 70 for better stability on multi-threaded servers)
+max-fetching-threads: 40
 
 # For how long (in milliseconds) should we keep a non-core thread alive before killing it?
 # This allows us to reuse threads instead of creating new ones every time we need to fetch something.

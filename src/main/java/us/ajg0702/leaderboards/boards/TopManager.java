@@ -34,7 +34,28 @@ public class TopManager {
     private final AtomicInteger fetching = new AtomicInteger(0);
 
     public void shutdown() {
-        fetchService.shutdownNow();
+        try {
+            // Log current state before shutdown
+            plugin.getLogger().info("Shutting down TopManager - Active: " + getActiveFetchers() + 
+                    ", Queued: " + getQueuedTasks() + ", Fetching: " + getFetching());
+                    
+            fetchService.shutdown();
+            
+            // Give threads a chance to finish gracefully
+            if (!fetchService.awaitTermination(5, TimeUnit.SECONDS)) {
+                plugin.getLogger().warning("TopManager threads didn't finish within 5 seconds, forcing shutdown");
+                fetchService.shutdownNow();
+                
+                // Wait a bit more for forced shutdown
+                if (!fetchService.awaitTermination(2, TimeUnit.SECONDS)) {
+                    plugin.getLogger().severe("TopManager threads could not be terminated");
+                }
+            }
+        } catch (InterruptedException e) {
+            plugin.getLogger().warning("TopManager shutdown interrupted");
+            fetchService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     private static final String OUT_OF_THREADS_MESSAGE = "unable to create native thread: possibly out of memory or process/resource limits reached";
@@ -44,13 +65,26 @@ public class TopManager {
     public TopManager(LeaderboardPlugin pl, List<String> initialBoards) {
         plugin = pl;
         CacheMethod method = plugin.getCache().getMethod();
-        int t = method instanceof MysqlMethod ? Math.max(10, method.getMaxConnections()) : plugin.getAConfig().getInt("max-fetching-threads");
+        int configuredThreads = method instanceof MysqlMethod ? Math.max(10, method.getMaxConnections()) : plugin.getAConfig().getInt("max-fetching-threads");
+        
+        // Cap the thread count to reasonable limits to prevent memory issues
+        // Consider available processors and system resources
+        int availableProcessors = Runtime.getRuntime().availableProcessors();
+        int maxReasonableThreads = Math.max(16, Math.min(availableProcessors * 4, 50));
+        int t = Math.min(configuredThreads, maxReasonableThreads);
+        
         int keepAlive = plugin.getAConfig().getInt("fetching-thread-pool-keep-alive");
+        
+        // Reduce queue size significantly to prevent excessive memory usage
+        // A large queue can cause OOM issues when tasks accumulate
+        int queueSize = Math.max(1000, Math.min(10000, t * 100));
+        
         fetchService = new ThreadPoolExecutor(
                 t, t,
                 keepAlive, TimeUnit.MILLISECONDS,
-                new ArrayBlockingQueue<>(1000000, true),
-                ThreadFactoryProxy.getDefaultThreadFactory("AJLBFETCH")
+                new ArrayBlockingQueue<>(queueSize, true),
+                ThreadFactoryProxy.getDefaultThreadFactory("AJLBFETCH"),
+                new ThreadPoolExecutor.CallerRunsPolicy() // Handle rejected tasks gracefully
         );
         fetchService.allowCoreThreadTimeOut(true);
         plugin.getScheduler().runTaskTimerAsynchronously(() -> {
@@ -523,9 +557,26 @@ public class TopManager {
 
 
     private void checkWrong() {
-        if(fetching.get() > 5000) {
+        int currentFetching = fetching.get();
+        if(currentFetching > 5000) {
             plugin.getLogger().warning("Something might be going wrong, printing some useful info");
+            plugin.getLogger().warning("Fetching count: " + currentFetching + 
+                    ", Active threads: " + getActiveFetchers() + 
+                    "/" + getMaxFetchers() + 
+                    ", Queued tasks: " + getQueuedTasks() + 
+                    "/" + getQueueCapacity());
+            
+            if (isApproachingCapacity()) {
+                plugin.getLogger().warning("Thread pool is approaching capacity! This may indicate a performance bottleneck.");
+            }
+            
             Thread.dumpStack();
+        }
+        
+        // Also check if we're approaching thread pool capacity even with lower fetching counts
+        if (currentFetching > 1000 && isApproachingCapacity()) {
+            plugin.getLogger().warning("Thread pool approaching capacity - Fetching: " + currentFetching + 
+                    ", Queue: " + getQueuedTasks() + "/" + getQueueCapacity());
         }
     }
 
@@ -623,9 +674,35 @@ public class TopManager {
 
     @SuppressWarnings("UnusedReturnValue")
     public Future<?> submit(Runnable task) {
-        return fetchService.submit(task);
+        try {
+            return fetchService.submit(task);
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            if (e.getMessage() != null && e.getMessage().contains(OUT_OF_THREADS_MESSAGE)) {
+                informAboutThreadLimit();
+            } else {
+                plugin.getLogger().warning("Task rejected by thread pool. Queue might be full or executor shutting down.");
+                if (plugin.getAConfig().getBoolean("fetching-de-bug")) {
+                    plugin.getLogger().warning("Queue size: " + getQueuedTasks() + ", Active threads: " + getActiveFetchers());
+                }
+            }
+            // Return a completed future to prevent null pointer exceptions
+            return java.util.concurrent.CompletableFuture.completedFuture(null);
+        }
     }
 
+    /**
+     * Get current queue capacity for debugging purposes
+     */
+    public int getQueueCapacity() {
+        return fetchService.getQueue().remainingCapacity() + fetchService.getQueue().size();
+    }
+
+    /**
+     * Check if the thread pool is approaching capacity limits
+     */
+    public boolean isApproachingCapacity() {
+        return (double) getQueuedTasks() / getQueueCapacity() > 0.8;
+    }
 
     private void informAboutThreadLimit() {
         plugin.getLogger().warning("'" + OUT_OF_THREADS_MESSAGE + "' error detected! " +
@@ -633,6 +710,11 @@ public class TopManager {
                 "If the server crashes, take the crash report and paste it into https://crash-report-analyser.ajg0702.us/ " +
                 "to help find which plugin is using too many threads. If you need help interpreting the results, " +
                 "feel free to ask in aj's discord server (invite link is on the ajLeaderboards plugin page under 'support')");
+        
+        // Add additional debugging info
+        plugin.getLogger().warning("Current thread pool stats - Active: " + getActiveFetchers() + 
+                "/" + getMaxFetchers() + ", Queued: " + getQueuedTasks() + 
+                "/" + getQueueCapacity() + ", Workers: " + getWorkers());
     }
 }
 
