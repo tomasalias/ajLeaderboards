@@ -70,14 +70,37 @@ public class TopManager {
         // Cap the thread count to reasonable limits to prevent memory issues
         // Consider available processors and system resources
         int availableProcessors = Runtime.getRuntime().availableProcessors();
+        long maxMemory = Runtime.getRuntime().maxMemory();
+        long availableMemory = maxMemory - (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory());
+        
         int maxReasonableThreads = Math.max(16, Math.min(availableProcessors * 4, 50));
+        
+        // Further reduce thread count for very low memory systems
+        if (availableMemory < 2048 * 1024 * 1024) { // Less than 2GB
+            maxReasonableThreads = Math.max(8, Math.min(availableProcessors * 2, 20));
+        }
+        
         int t = Math.min(configuredThreads, maxReasonableThreads);
         
         int keepAlive = plugin.getAConfig().getInt("fetching-thread-pool-keep-alive");
         
         // Reduce queue size significantly to prevent excessive memory usage
         // A large queue can cause OOM issues when tasks accumulate
-        int queueSize = Math.max(1000, Math.min(10000, t * 100));
+        // Conservative queue sizing based on available memory and thread count
+        // Each queued task uses roughly 1KB of memory (conservative estimate)
+        int baseQueueSize = Math.max(100, Math.min(1000, t * 50)); // Reduced from t * 100
+        
+        // Further reduce queue size if we have limited memory
+        if (availableMemory < 2048 * 1024 * 1024) { // Less than 2GB
+            baseQueueSize = Math.max(25, Math.min(250, t * 12)); // Very conservative for limited memory
+            plugin.getLogger().warning("Very low memory detected (" + (availableMemory / 1024 / 1024) + "MB), " +
+                    "using minimal queue size: " + baseQueueSize);
+        } else if (availableMemory < 1024 * 1024 * 1024) { // Less than 1GB  
+            baseQueueSize = Math.max(50, Math.min(500, t * 25));
+            plugin.getLogger().info("Low memory detected, reducing queue size to " + baseQueueSize);
+        }
+        
+        int queueSize = baseQueueSize;
         
         fetchService = new ThreadPoolExecutor(
                 t, t,
@@ -87,10 +110,21 @@ public class TopManager {
                 new ThreadPoolExecutor.CallerRunsPolicy() // Handle rejected tasks gracefully
         );
         fetchService.allowCoreThreadTimeOut(true);
+        
+        // Log memory and thread pool configuration for debugging
+        plugin.getLogger().info("TopManager initialized - Threads: " + t + ", Queue: " + queueSize + 
+                ", Available Memory: " + (availableMemory / 1024 / 1024) + "MB");
+                
         plugin.getScheduler().runTaskTimerAsynchronously(() -> {
-            rolling.add(getQueuedTasks()+getActiveFetchers());
-            if(rolling.size() > 50) {
-                rolling.remove(0);
+            synchronized (rolling) {
+                rolling.add(getQueuedTasks()+getActiveFetchers());
+                // Keep only last 50 entries, but remove in batches to reduce overhead
+                if(rolling.size() > 60) {
+                    // Remove 10 oldest entries when we exceed 60, reducing synchronization frequency
+                    for(int i = 0; i < 10 && rolling.size() > 50; i++) {
+                        rolling.remove(0);
+                    }
+                }
             }
         }, 0, 2);
 
@@ -172,6 +206,9 @@ public class TopManager {
         return cached;
     }
 
+    // Limit the size of positionPlayerCache to prevent unbounded growth
+    private static final int MAX_POSITION_CACHE_SIZE = 10000;
+    
     public final Map<UUID, Map<BoardType, Integer>> positionPlayerCache = new ConcurrentHashMap<>();
 
     private void cacheStatPosition(int position, BoardType boardType, UUID playerUUID) {
@@ -187,6 +224,20 @@ public class TopManager {
         newMap.put(boardType, position);
 
         positionPlayerCache.put(playerUUID, newMap);
+        
+        // Prevent unbounded growth by removing oldest entries when cache gets too large
+        if (positionPlayerCache.size() > MAX_POSITION_CACHE_SIZE) {
+            // Remove 10% of entries when limit is exceeded
+            int toRemove = MAX_POSITION_CACHE_SIZE / 10;
+            Iterator<Map.Entry<UUID, Map<BoardType, Integer>>> iterator = positionPlayerCache.entrySet().iterator();
+            while (iterator.hasNext() && toRemove > 0) {
+                iterator.next();
+                iterator.remove();
+                toRemove--;
+            }
+            plugin.getLogger().info("Position cache size exceeded " + MAX_POSITION_CACHE_SIZE + 
+                    ", removed oldest entries. Current size: " + positionPlayerCache.size());
+        }
     }
 
     Map<PlayerBoardType, Long> statEntryLastRefresh = new HashMap<>();
@@ -457,7 +508,9 @@ public class TopManager {
         return boardCache;
     }
 
-    List<Integer> rolling = new CopyOnWriteArrayList<>();
+    // Use LinkedList with synchronized access instead of CopyOnWriteArrayList to reduce memory pressure
+    // CopyOnWriteArrayList creates a new array on every write, which with updates every 0.1s causes memory issues
+    private final List<Integer> rolling = Collections.synchronizedList(new LinkedList<>());
     private void removeFetching() {
         fetching.decrementAndGet();
     }
@@ -467,7 +520,10 @@ public class TopManager {
     }
 
     public int getFetchingAverage() {
-        List<Integer> snap = new ArrayList<>(rolling);
+        List<Integer> snap;
+        synchronized (rolling) {
+            snap = new ArrayList<>(rolling);
+        }
         if(snap.size() == 0) return 0;
         int sum = 0;
         for(Integer n : snap) {
@@ -503,7 +559,35 @@ public class TopManager {
     }
 
 
+    // Limit the size of extra cache to prevent unbounded growth
+    private static final int MAX_EXTRA_CACHE_SIZE = 5000;
+    
     Map<ExtraKey, Cached<String>> extraCache = new HashMap<>();
+    
+    public String fetchExtra(UUID id, String placeholder) {
+        String value = plugin.getExtraManager().getExtra(id, placeholder);
+        
+        // Clean up cache if it's getting too large
+        if (extraCache.size() > MAX_EXTRA_CACHE_SIZE) {
+            // Remove entries older than 10 minutes
+            long cutoffTime = System.currentTimeMillis() - (10 * 60 * 1000);
+            extraCache.entrySet().removeIf(entry -> entry.getValue().getLastGet() < cutoffTime);
+            
+            // If still too large after cleanup, remove oldest entries
+            if (extraCache.size() > MAX_EXTRA_CACHE_SIZE) {
+                int toRemove = extraCache.size() - (MAX_EXTRA_CACHE_SIZE * 3 / 4); // Remove down to 75% capacity
+                Iterator<Map.Entry<ExtraKey, Cached<String>>> iterator = extraCache.entrySet().iterator();
+                while (iterator.hasNext() && toRemove > 0) {
+                    iterator.next();
+                    iterator.remove();
+                    toRemove--;
+                }
+            }
+        }
+        
+        extraCache.put(new ExtraKey(id, placeholder), new Cached<>(System.currentTimeMillis(), value));
+        return value;
+    }
     public String getExtra(UUID id, String placeholder) {
         ExtraKey key = new ExtraKey(id, placeholder);
         Cached<String> cached = extraCache.get(key);
@@ -522,11 +606,6 @@ public class TopManager {
             }
             return cached.getThing();
         }
-    }
-    public String fetchExtra(UUID id, String placeholder) {
-        String value = plugin.getExtraManager().getExtra(id, placeholder);
-        extraCache.put(new ExtraKey(id, placeholder), new Cached<>(System.currentTimeMillis(), value));
-        return value;
     }
     public void fetchExtraAsync(UUID id, String placeholder) {
         fetchService.submit(() -> fetchExtra(id, placeholder));
@@ -645,7 +724,9 @@ public class TopManager {
     }
 
     public List<Integer> getRolling() {
-        return rolling;
+        synchronized (rolling) {
+            return new ArrayList<>(rolling);
+        }
     }
 
     public int getActiveFetchers() {
