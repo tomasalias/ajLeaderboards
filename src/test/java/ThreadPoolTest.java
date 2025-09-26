@@ -119,26 +119,39 @@ public class ThreadPoolTest {
         long freeMemory = runtime.freeMemory();
         long availableMemory = maxMemory - (totalMemory - freeMemory);
         
-        // Simulate low memory condition
-        boolean isLowMemory = availableMemory < 1024 * 1024 * 1024; // Less than 1GB
-        
         int threadCount = 20;
         int queueSize;
+        int maxThreads;
         
-        if (isLowMemory) {
+        // Test very low memory condition (less than 2GB)
+        if (availableMemory < 2048 * 1024 * 1024) {
+            maxThreads = Math.max(8, Math.min(Runtime.getRuntime().availableProcessors() * 2, 20));
+            queueSize = Math.max(25, Math.min(250, threadCount * 12));
+        } 
+        // Test low memory condition (less than 1GB)  
+        else if (availableMemory < 1024 * 1024 * 1024) {
+            maxThreads = Math.max(16, Math.min(Runtime.getRuntime().availableProcessors() * 4, 50));
             queueSize = Math.max(50, Math.min(500, threadCount * 25));
-        } else {
+        } 
+        // Normal memory
+        else {
+            maxThreads = Math.max(16, Math.min(Runtime.getRuntime().availableProcessors() * 4, 50));
             queueSize = Math.max(100, Math.min(1000, threadCount * 50));
         }
         
-        assertTrue("Queue size should be reasonable", queueSize >= 50);
+        assertTrue("Queue size should be reasonable", queueSize >= 25);
         assertTrue("Queue size should not exceed maximum", queueSize <= 1000);
+        assertTrue("Thread count should be reasonable", maxThreads >= 8);
+        assertTrue("Thread count should not exceed maximum", maxThreads <= 50);
         
-        if (isLowMemory) {
-            assertTrue("Low memory queue should be smaller", queueSize <= 500);
+        System.out.println("Memory-based configuration:");
+        System.out.println("  Available memory: " + (availableMemory / 1024 / 1024) + "MB");
+        System.out.println("  Max threads: " + maxThreads);
+        System.out.println("  Queue size: " + queueSize);
+        
+        if (availableMemory < 2048 * 1024 * 1024) {
+            System.out.println("  Very low memory mode activated");
+            assertTrue("Very low memory should use minimal resources", queueSize <= 250 && maxThreads <= 20);
         }
-        
-        System.out.println("Memory-based queue size: " + queueSize);
-        System.out.println("Available memory: " + (availableMemory / 1024 / 1024) + "MB");
     }
 }

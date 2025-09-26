@@ -70,23 +70,32 @@ public class TopManager {
         // Cap the thread count to reasonable limits to prevent memory issues
         // Consider available processors and system resources
         int availableProcessors = Runtime.getRuntime().availableProcessors();
+        long maxMemory = Runtime.getRuntime().maxMemory();
+        long availableMemory = maxMemory - (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory());
+        
         int maxReasonableThreads = Math.max(16, Math.min(availableProcessors * 4, 50));
+        
+        // Further reduce thread count for very low memory systems
+        if (availableMemory < 2048 * 1024 * 1024) { // Less than 2GB
+            maxReasonableThreads = Math.max(8, Math.min(availableProcessors * 2, 20));
+        }
+        
         int t = Math.min(configuredThreads, maxReasonableThreads);
         
         int keepAlive = plugin.getAConfig().getInt("fetching-thread-pool-keep-alive");
         
         // Reduce queue size significantly to prevent excessive memory usage
         // A large queue can cause OOM issues when tasks accumulate
-        // Consider available memory when setting queue size
-        long maxMemory = Runtime.getRuntime().maxMemory();
-        long availableMemory = maxMemory - (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory());
-        
         // Conservative queue sizing based on available memory and thread count
         // Each queued task uses roughly 1KB of memory (conservative estimate)
         int baseQueueSize = Math.max(100, Math.min(1000, t * 50)); // Reduced from t * 100
         
-        // Further reduce queue size if we have limited memory (less than 1GB available)
-        if (availableMemory < 1024 * 1024 * 1024) { // Less than 1GB
+        // Further reduce queue size if we have limited memory
+        if (availableMemory < 2048 * 1024 * 1024) { // Less than 2GB
+            baseQueueSize = Math.max(25, Math.min(250, t * 12)); // Very conservative for limited memory
+            plugin.getLogger().warning("Very low memory detected (" + (availableMemory / 1024 / 1024) + "MB), " +
+                    "using minimal queue size: " + baseQueueSize);
+        } else if (availableMemory < 1024 * 1024 * 1024) { // Less than 1GB  
             baseQueueSize = Math.max(50, Math.min(500, t * 25));
             plugin.getLogger().info("Low memory detected, reducing queue size to " + baseQueueSize);
         }
